@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+    <!-- ==================== ROOT ==================== -->
+    <xs:element name="people">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element ref="person" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ==================== PERSON ==================== -->
+    <xs:element name="person">
+        <xs:complexType>
+            <xs:all>
+                <xs:element name="first-name"  type="xs:string"     minOccurs="0"/>
+                <xs:element name="last-name"   type="xs:string"     minOccurs="0"/>
+                <xs:element name="gender"      type="genderType"    minOccurs="0"/>
+                <xs:element name="spouse"      type="personRefType" minOccurs="0"/>
+                <xs:element name="parents"     type="parentsType"   minOccurs="0"/>
+                <xs:element name="children"    type="childrenType"  minOccurs="0"/>
+                <xs:element name="siblings"    type="siblingsType"  minOccurs="0"/>
+            </xs:all>
+            <xs:attribute name="id" type="personIdType" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ==================== SIMPLE TYPES ==================== -->
+
+    <!-- ID формата P + цифры -->
+    <xs:simpleType name="personIdType">
+        <xs:restriction base="xs:ID">
+            <xs:pattern value="P[0-9]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- IDREF формата P + цифры -->
+    <xs:simpleType name="personIdRefType">
+        <xs:restriction base="xs:IDREF">
+            <xs:pattern value="P[0-9]+"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="genderType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="male"/>
+            <xs:enumeration value="female"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- ==================== REFERENCE WITH OPTIONAL NAME ==================== -->
+
+    <xs:complexType name="personRefType" mixed="true">
+        <xs:attribute name="id" type="personIdRefType" use="optional"/>
+    </xs:complexType>
+
+    <!-- ==================== PARENTS ==================== -->
+
+    <xs:complexType name="parentsType">
+        <xs:all>
+            <xs:element name="father" type="personRefType" minOccurs="0"/>
+            <xs:element name="mother" type="personRefType" minOccurs="0"/>
+        </xs:all>
+    </xs:complexType>
+
+    <!-- ==================== CHILDREN ==================== -->
+
+    <xs:complexType name="childrenType">
+        <xs:sequence>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element name="son"      type="personRefType"/>
+                <xs:element name="daughter"  type="personRefType"/>
+                <xs:element name="child"     type="personRefType"/>
+            </xs:choice>
+        </xs:sequence>
+        <xs:attribute name="count" type="xs:nonNegativeInteger" use="required"/>
+    </xs:complexType>
+
+    <!-- ==================== SIBLINGS ==================== -->
+
+    <xs:complexType name="siblingsType">
+        <xs:sequence>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element name="brother" type="personRefType"/>
+                <xs:element name="sister"  type="personRefType"/>
+                <xs:element name="sibling" type="personRefType"/>
+            </xs:choice>
+        </xs:sequence>
+    </xs:complexType>
+
+</xs:schema>

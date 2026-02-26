@@ -1,8 +1,6 @@
 (ns task-c5)
 
-(defn create-forks [n]
-  (mapv #(ref {:id % :uses 0 :owner nil})
-        (range n)))
+(defn create-forks [n] (mapv #(ref {:id % :uses 0 :owner nil}) (range n)))
 
 (def tx-attempts (atom 0))
 
