@@ -20,7 +20,7 @@ public class Main {
             parser.parse(in);
         }
 
-        parser.resolveSiblingGenders();
+        parser.resolveRelations();
         JaxbWriter.writeWithValidation(parser.people, xsd, output);
     }
 }

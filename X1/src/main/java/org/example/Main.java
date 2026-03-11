@@ -1,7 +1,5 @@
 package org.example;
 
-import java.nio.file.Paths;
-import java.util.List;
 import java.util.Map;
 
 public class Main {
@@ -13,7 +11,7 @@ public class Main {
         try {
             parser.parse(inputPath);
             Map<String, Person> people = parser.people;
-            parser.resolveSiblings();
+            parser.resolveRelations();
 
             // Запись выходного XML
             PersonXmlWriter writer = new PersonXmlWriter(people);
@@ -23,3 +21,5 @@ public class Main {
         }
     }
 }
+
+// обобщить пост обработку

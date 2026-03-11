@@ -72,16 +72,74 @@ public class PersonXmlParser {
         r.close();
     }
 
-    public void resolveSiblingGenders() {
+    public void resolveRelations() {
         for (Person p : people.values()) {
-            if (p.siblingIds == null) continue;
-            Iterator<String> it = p.siblingIds.iterator();
-            while (it.hasNext()) {
-                String sid = it.next();
-                Person sib = people.get(sid);
-                if (sib == null) continue;
-                if ("M".equals(sib.gender)) { p.addUnique(p.brotherIds(), sid); it.remove(); }
-                else if ("F".equals(sib.gender)) { p.addUnique(p.sisterIds(), sid); it.remove(); }
+            if (p.fatherId != null) {
+                Person father = people.get(p.fatherId);
+                if (father != null && father.gender == null) {
+                    father.gender = "M";
+                }
+            }
+
+            if (p.motherId != null) {
+                Person mother = people.get(p.motherId);
+                if (mother != null && mother.gender == null) {
+                    mother.gender = "F";
+                }
+            }
+
+            // <parent value="P10"/>   <parent value="P20"/>
+            // fatherId = P10           motherId = P20
+            // P10.gender = "F"         P20.gender = "M"
+            if (p.fatherId != null && p.motherId != null) {
+                Person f = people.get(p.fatherId);
+                if (f != null && "F".equals(f.gender)) {
+                    String tmp = p.fatherId;
+                    p.fatherId = p.motherId;
+                    p.motherId = tmp;
+                }
+            }
+
+            if (p.spouseId != null) {
+                Person spouse = people.get(p.spouseId);
+                if (spouse != null) {
+                    if (spouse.spouseId == null) spouse.spouseId = p.id;
+                    if (p.gender != null && spouse.gender == null) {
+                        spouse.gender = "M".equals(p.gender) ? "F" : "M";
+                    }
+                }
+            }
+
+            if (p.childrenIds() != null) {
+                for (String cid : p.childrenIds()) {
+                    Person child = people.get(cid);
+                    if (child == null) continue;
+                    if ("M".equals(p.gender)) {
+                        if (child.fatherId == null) child.fatherId = p.id;
+                    } else if ("F".equals(p.gender)) {
+                        if (child.motherId == null) child.motherId = p.id;
+                    }
+                }
+            }
+
+            if (p.fatherId != null) {
+                Person father = people.get(p.fatherId);
+                if (father != null) father.addUnique(father.childrenIds(), p.id);
+            }
+            if (p.motherId != null) {
+                Person mother = people.get(p.motherId);
+                if (mother != null) mother.addUnique(mother.childrenIds(), p.id);
+            }
+
+            if (p.siblingIds != null) {
+                Iterator<String> it = p.siblingIds.iterator();
+                while (it.hasNext()) {
+                    String sid = it.next();
+                    Person sib = people.get(sid);
+                    if (sib == null) continue;
+                    if ("M".equals(sib.gender)) { p.addUnique(p.brotherIds(), sid); it.remove(); }
+                    else if ("F".equals(sib.gender)) { p.addUnique(p.sisterIds(), sid); it.remove(); }
+                }
             }
         }
     }

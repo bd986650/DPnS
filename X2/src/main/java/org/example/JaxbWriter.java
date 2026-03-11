@@ -32,10 +32,14 @@ public class JaxbWriter {
             // spouse
             if (src.spouseId != null || src.spouseName != null) {
                 String sName = src.spouseName != null ? src.spouseName : nameOf(people, src.spouseId);
-                PersonRef ref = new PersonRef();
-                ref.setId(safeId(src.spouseId, allOutputIds));
-                ref.setName(sName);
-                jp.setSpouse(ref);
+                String safeSpouseId = safeId(src.spouseId, allOutputIds);
+                // пропускаем если нет ни id, ни имени
+                if (safeSpouseId != null || sName != null) {
+                    PersonRef ref = new PersonRef();
+                    ref.setId(safeSpouseId);
+                    ref.setName(sName);
+                    jp.setSpouse(ref);
+                }
             }
 
             // parents
@@ -43,25 +47,30 @@ public class JaxbWriter {
             boolean hasParents = false;
             if (src.fatherId != null || src.fatherName != null) {
                 String fn = src.fatherName != null ? src.fatherName : nameOf(people, src.fatherId);
-                PersonRef ref = new PersonRef();
-                ref.setId(safeId(src.fatherId, allOutputIds));
-                ref.setName(fn);
-                par.setFather(ref);
-                hasParents = true;
+                String safeFatherId = safeId(src.fatherId, allOutputIds);
+                if (safeFatherId != null || fn != null) {
+                    PersonRef ref = new PersonRef();
+                    ref.setId(safeFatherId);
+                    ref.setName(fn);
+                    par.setFather(ref);
+                    hasParents = true;
+                }
             }
             if (src.motherId != null || src.motherName != null) {
                 String mn = src.motherName != null ? src.motherName : nameOf(people, src.motherId);
-                PersonRef ref = new PersonRef();
-                ref.setId(safeId(src.motherId, allOutputIds));
-                ref.setName(mn);
-                par.setMother(ref);
-                hasParents = true;
+                String safeMotherId = safeId(src.motherId, allOutputIds);
+                if (safeMotherId != null || mn != null) {
+                    PersonRef ref = new PersonRef();
+                    ref.setId(safeMotherId);
+                    ref.setName(mn);
+                    par.setMother(ref);
+                    hasParents = true;
+                }
             }
             if (hasParents) jp.setParents(par);
 
             // children
-            int childCount = sizeCol(src.childrenIds) + sizeCol(src.childrenNames);
-            if (childCount > 0) {
+            if (sizeCol(src.childrenIds) + sizeCol(src.childrenNames) > 0) {
                 Children ch = new Children();
                 if (src.childrenIds != null) {
                     for (String cid : src.childrenIds) {
@@ -69,6 +78,7 @@ public class JaxbWriter {
                         String cn = cp != null ? getFullName(cp) : null;
                         String g = cp != null ? cp.gender : null;
                         String safeCid = safeId(cid, allOutputIds);
+                        if (safeCid == null && cn == null) continue;
                         if ("M".equals(g))       ch.getItems().add(new Son(safeCid, cn));
                         else if ("F".equals(g))   ch.getItems().add(new Daughter(safeCid, cn));
                         else                       ch.getItems().add(new Child(safeCid, cn));
@@ -76,11 +86,15 @@ public class JaxbWriter {
                 }
                 if (src.childrenNames != null) {
                     for (String cn : src.childrenNames) {
-                        ch.getItems().add(new Child(null, cn));
+                        if (cn != null) {
+                            ch.getItems().add(new Child(null, cn));
+                        }
                     }
                 }
-                ch.setCount(childCount);
-                jp.setChildren(ch);
+                if (!ch.getItems().isEmpty()) {
+                    ch.setCount(ch.getItems().size());
+                    jp.setChildren(ch);
+                }
             }
 
             // siblings
@@ -95,7 +109,9 @@ public class JaxbWriter {
                 addNameItems(sib, src.sisterNames, "sister");
                 addItems(sib, src.siblingIds, people, "sibling", allOutputIds);
                 addNameItems(sib, src.siblingNames, "sibling");
-                jp.setSiblings(sib);
+                if (!sib.getItems().isEmpty()) {
+                    jp.setSiblings(sib);
+                }
             }
 
             jaxbPersons.add(jp);
@@ -140,13 +156,16 @@ public class JaxbWriter {
         for (String id : ids) {
             Person p = people.get(id);
             String name = p != null ? getFullName(p) : null;
-            sib.getItems().add(createByType(type, safeId(id, allOutputIds), name));
+            String safeIdVal = safeId(id, allOutputIds);
+            if (safeIdVal == null && name == null) continue;
+            sib.getItems().add(createByType(type, safeIdVal, name));
         }
     }
 
     private static void addNameItems(Siblings sib, Collection<String> names, String type) {
         if (names == null) return;
         for (String n : names) {
+            if (n == null) continue;
             sib.getItems().add(createByType(type, null, n));
         }
     }

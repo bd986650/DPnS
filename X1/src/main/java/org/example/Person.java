@@ -37,25 +37,25 @@ public class Person {
         return lastName;
     }
 
-    public void merge(Person o) {
-        if (o.firstName != null) firstName = o.firstName;
-        if (o.lastName != null) lastName = o.lastName;
-        if (o.gender != null) gender = o.gender;
-        if (o.spouseId != null) spouseId = o.spouseId;
-        if (o.spouseName != null) spouseName = o.spouseName;
-        if (o.fatherId != null) fatherId = o.fatherId;
-        if (o.fatherName != null) fatherName = o.fatherName;
-        if (o.motherId != null) motherId = o.motherId;
-        if (o.motherName != null) motherName = o.motherName;
-        if (o.declaredChildrenCount >= 0) declaredChildrenCount = o.declaredChildrenCount;
-        mergeLists(this::childrenIds, o.childrenIds);
-        mergeLists(this::childrenNames, o.childrenNames);
-        mergeLists(this::brotherIds, o.brotherIds);
-        mergeLists(this::brotherNames, o.brotherNames);
-        mergeLists(this::sisterIds, o.sisterIds);
-        mergeLists(this::sisterNames, o.sisterNames);
-        mergeLists(this::siblingIds, o.siblingIds);
-        mergeLists(this::siblingNames, o.siblingNames);
+    public void merge(Person p) {
+        if (p.firstName != null) firstName = p.firstName;
+        if (p.lastName != null) lastName = p.lastName;
+        if (p.gender != null) gender = p.gender;
+        if (p.spouseId != null) spouseId = p.spouseId;
+        if (p.spouseName != null) spouseName = p.spouseName;
+        if (p.fatherId != null) fatherId = p.fatherId;
+        if (p.fatherName != null) fatherName = p.fatherName;
+        if (p.motherId != null) motherId = p.motherId;
+        if (p.motherName != null) motherName = p.motherName;
+        if (p.declaredChildrenCount >= 0) declaredChildrenCount = p.declaredChildrenCount;
+        mergeLists(this::childrenIds, p.childrenIds);
+        mergeLists(this::childrenNames, p.childrenNames);
+        mergeLists(this::brotherIds, p.brotherIds);
+        mergeLists(this::brotherNames, p.brotherNames);
+        mergeLists(this::sisterIds, p.sisterIds);
+        mergeLists(this::sisterNames, p.sisterNames);
+        mergeLists(this::siblingIds, p.siblingIds);
+        mergeLists(this::siblingNames, p.siblingNames);
     }
 
     private void mergeLists(Supplier<List<String>> target, List<String> source) {
