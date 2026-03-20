@@ -1,0 +1,566 @@
+openapi: 3.0.3
+info:
+  title: Flight Booking API
+  description: RESTful API for flight search, booking, and check-in
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+
+paths:
+  # ── Cities ──────────────────────────────────────────────
+  /cities:
+    get:
+      summary: All available source and destination cities
+      tags: [Cities]
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [source, destination]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/City'
+
+  /cities/{cityId}/airports:
+    get:
+      summary: List airports within a city
+      tags: [Cities]
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - name: cityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Airport'
+        '404':
+          description: City not found
+
+  # ── Airports ────────────────────────────────────────────
+  /airports:
+    get:
+      summary: List all available source and destination airports
+      tags: [Airports]
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [source, destination]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Airport'
+
+  # ── Schedules ───────────────────────────────────────────
+  /airports/{airportCode}/schedule/inbound:
+    get:
+      summary: List inbound schedule for an airport
+      tags: [Schedules]
+      parameters:
+        - name: airportCode
+          in: path
+          required: true
+          schema:
+            type: string
+          example: JFK
+
+        - name: from
+          in: query
+          description: Start of time range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+          example: 2026-03-18T00:00:00Z
+        - name: to
+          in: query
+          description: End of time range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+          example: 2026-03-18T23:59:59Z
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            example: Europe/London
+          description: "Timezone used to format response times. If not provided, user's profile timezone or UTC is used"
+        - name: status
+          in: query
+          description: Flight status filter
+          schema:
+            type: string
+            enum: [scheduled, delayed, landed, cancelled]
+        - name: airline
+          in: query
+          description: Airline IATA code
+          schema:
+            type: string
+          example: AA
+        - name: flightNumber
+          in: query
+          description: Flight number
+          schema:
+            type: string
+          example: AA100
+
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InboundScheduleEntry'
+        '404':
+          description: Airport not found
+
+  /airports/{airportCode}/schedule/outbound:
+    get:
+      summary: List outbound schedule for an airport
+      tags: [Schedules]
+      parameters:
+        - name: airportCode
+          in: path
+          required: true
+          schema:
+            type: string
+          example: JFK
+        - name: from
+          in: query
+          description: Start of time range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: End of time range (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            example: Europe/London
+          description: "Timezone used to format response times. If not provided, user's profile timezone or UTC is used"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [scheduled, delayed, departed, cancelled]
+        - name: airline
+          in: query
+          schema:
+            type: string
+        - name: flightNumber
+          in: query
+          schema:
+            type: string
+
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OutboundScheduleEntry'
+        '404':
+          description: Airport not found
+
+  # ── Routes ─────────────────────────────────────────────
+  /routes:
+    get:
+      summary: List routes connecting two points (airport or city)
+      tags: [Routes]
+      parameters:
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - name: originType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [airport, city]
+        - name: origin
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Airport code or city ID
+        - name: destinationType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [airport, city]
+        - name: destination
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Airport code or city ID
+        - name: departureDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: "Flights departing between 00:00:00 of this date and 00:00:00 of the next date"
+        - name: timezone
+          in: query
+          required: false
+          schema:
+            type: string
+            example: Europe/London
+          description: "Timezone used to format response times. If not provided, user's profile timezone or UTC is used"
+        - name: bookingClass
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [Economy, Comfort, Business]
+        - name: maxConnections
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1, 2, 3]
+          description: "Max connections: 0 = direct only. Omit for unbound."
+
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Route'
+        '400':
+          description: Invalid parameters
+
+  # ── Bookings ────────────────────────────────────────────
+  /bookings:
+    # put vs post просто посмотреть разницу и почему выбрали post
+    post:
+      summary: Create a booking for a selected route for a single passenger
+      tags: [Bookings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+      responses:
+        '201':
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: Invalid request
+        '409':
+          description: No seats available
+
+  # ── Check-in ────────────────────────────────────────────
+  /bookings/{bookingId}/checkin:
+    post:
+      summary: Online check-in for a flight
+      tags: [Check-in]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckInRequest'
+      responses:
+        '200':
+          description: Check-in successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BoardingPass'
+        '400':
+          description: Check-in not available
+        '404':
+          description: Booking not found
+
+# ════════════════════════════════════════════════════════════
+components:
+  parameters:
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      required: false
+      description: "Preferred response language for localized fields."
+      schema:
+        type: string
+        
+  schemas:
+    City:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: Localized city name (depends on Accept-Language)
+        country:
+          type: string
+          description: Localized country name (depends on Accept-Language)
+
+    Airport:
+      type: object
+      properties:
+        code:
+          type: string
+          example: JFK
+        name:
+          type: string
+          description: Localized airport name (depends on Accept-Language)
+        cityId:
+          type: string
+        cityName:
+          type: string
+          description: Localized city name (depends on Accept-Language)
+
+    InboundScheduleEntry:
+      type: object
+      properties:
+        flightNo:
+          type: string
+          example: SU1234
+        origin:
+          type: string
+          description: Origin airport code
+        arrivalTime:
+          type: string
+          format: time
+          example: "14:30:00"
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+            enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+
+    OutboundScheduleEntry:
+      type: object
+      properties:
+        flightNo:
+          type: string
+          example: SU5678
+        destination:
+          type: string
+          description: Destination airport code
+        departureTime:
+          type: string
+          format: time
+          example: "08:15:00"
+        daysOfWeek:
+          type: array
+          items:
+            type: string
+            enum: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
+
+    FlightLeg:
+      type: object
+      properties:
+        flightNo:
+          type: string
+        originAirport:
+          type: string
+        destinationAirport:
+          type: string
+        departureDateTime:
+          type: string
+          format: date-time
+        arrivalDateTime:
+          type: string
+          format: date-time
+        availableClasses:
+          type: array
+          items:
+            type: string
+            enum: [Economy, Comfort, Business]
+
+    Route:
+      type: object
+      properties:
+        routeId:
+          type: string
+        connections:
+          type: integer
+          description: Number of connections (0 = direct)
+        totalDuration:
+          type: string
+          description: "ISO 8601 duration, e.g. PT5H30M"
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightLeg'
+
+    BookingRequest:
+      type: object
+      required:
+        - routeId
+        - bookingClass
+        - passenger
+      properties:
+        routeId:
+          type: string
+        bookingClass:
+          type: string
+          enum: [Economy, Comfort, Business]
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+
+    Passenger:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - dateOfBirth
+        - documentNumber
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        documentNumber:
+          type: string
+
+    Booking:
+      type: object
+      properties:
+        bookingId:
+          type: string
+        status:
+          type: string
+          enum: [confirmed, pending, cancelled]
+        routeId:
+          type: string
+        bookingClass:
+          type: string
+          enum: [Economy, Comfort, Business]
+        passenger:
+          $ref: '#/components/schemas/Passenger'
+        legs:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlightLeg'
+        createdAt:
+          type: string
+          format: date-time
+
+    CheckInRequest:
+      type: object
+      required:
+        - flightNo
+      properties:
+        flightNo:
+          type: string
+          description: Flight number to check in for
+        seatPreference:
+          type: string
+          enum: [window, aisle, middle]
+
+    BoardingPass:
+      type: object
+      properties:
+        bookingId:
+          type: string
+        flightNo:
+          type: string
+        passengerName:
+          type: string
+        seat:
+          type: string
+        gate:
+          type: string
+        boardingTime:
+          type: string
+          format: date-time
+        barcode:
+          type: string
