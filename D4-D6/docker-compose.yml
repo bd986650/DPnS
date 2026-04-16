@@ -1,0 +1,26 @@
+# Из корня D4-D6: docker compose up -d
+# Образ 17 — как в дампе (PostgreSQL 17.5). Образ 18+ конфликтует со старыми volume.
+# Если контейнер падает после смены версии: docker compose down -v && docker compose up -d
+# Первый старт: импорт demo.sql (~476 MB) — несколько минут.
+services:
+  db:
+    container_name: flights-db
+    image: postgres:17
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d demo"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 600s
+
+volumes:
+  db_data:
