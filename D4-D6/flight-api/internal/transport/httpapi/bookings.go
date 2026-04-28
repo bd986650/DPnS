@@ -39,6 +39,10 @@ func (h *Handler) handleCreateBooking(c *gin.Context) {
 		writeError(c, http.StatusConflict, "no seats available")
 		return
 	}
+	if err == model.ErrPricingRuleNotFound {
+		writeError(c, http.StatusUnprocessableEntity, "no pricing rule for this route and class")
+		return
+	}
 	if err != nil {
 		writeError(c, http.StatusInternalServerError, "internal error")
 		return

@@ -105,18 +105,13 @@ func (h *Handler) resolvePointToAirports(ctx context.Context, pointType, value s
 		return []string{strings.ToUpper(value)}, nil
 	}
 
-	airports, err := h.repo.ListAirports(ctx, "")
+	airports, err := h.repo.ListAirportsByCity(ctx, value)
 	if err != nil {
 		return nil, err
 	}
-	var res []string
+	res := make([]string, 0, len(airports))
 	for _, a := range airports {
-		if a.CityID == value {
-			res = append(res, a.Code)
-		}
-	}
-	if len(res) == 0 {
-		return nil, model.ErrCityNotFound
+		res = append(res, a.Code)
 	}
 	return res, nil
 }

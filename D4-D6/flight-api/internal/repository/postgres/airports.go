@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"flightapi/internal/cityid"
 	"flightapi/internal/ctxlang"
@@ -62,30 +63,41 @@ func (r *Repository) ListAirportsByCity(ctx context.Context, cityID string) ([]m
 	apName := fmt.Sprintf("a.airport_name->>'%s'", lang)
 	cityName := fmt.Sprintf("a.city->>'%s'", lang)
 
-	dRows, err := r.pool.Query(ctx, `SELECT DISTINCT city->>'en', country->>'en' FROM bookings.airports_data`)
-	if err != nil {
-		return nil, err
-	}
 	var cityEN, countryEN string
-	found := false
-	for dRows.Next() {
-		var ce, co string
-		if err := dRows.Scan(&ce, &co); err != nil {
-			dRows.Close()
+	err := r.pool.QueryRow(ctx, `
+SELECT city->>'en', country->>'en'
+FROM bookings.airports_data
+WHERE cityid.from_parts(city->>'en', country->>'en') = $1
+LIMIT 1
+`, cityID).Scan(&cityEN, &countryEN)
+	if err != nil {
+		if !isUndefinedFunction(err) {
+			return nil, model.ErrCityNotFound
+		}
+		dRows, err := r.pool.Query(ctx, `SELECT DISTINCT city->>'en', country->>'en' FROM bookings.airports_data`)
+		if err != nil {
 			return nil, err
 		}
-		if cityid.FromEN(ce, co) == cityID {
-			cityEN, countryEN = ce, co
-			found = true
-			break
+		found := false
+		for dRows.Next() {
+			var ce, co string
+			if err := dRows.Scan(&ce, &co); err != nil {
+				dRows.Close()
+				return nil, err
+			}
+			if cityid.FromEN(ce, co) == cityID {
+				cityEN, countryEN = ce, co
+				found = true
+				break
+			}
 		}
-	}
-	dRows.Close()
-	if err := dRows.Err(); err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, model.ErrCityNotFound
+		dRows.Close()
+		if err := dRows.Err(); err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, model.ErrCityNotFound
+		}
 	}
 
 	q := fmt.Sprintf(`
@@ -120,4 +132,8 @@ ORDER BY a.airport_code`, apName, cityName)
 		return nil, model.ErrCityNotFound
 	}
 	return out, nil
+}
+
+func isUndefinedFunction(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "does not exist")
 }

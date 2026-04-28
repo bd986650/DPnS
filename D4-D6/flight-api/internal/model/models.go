@@ -79,7 +79,6 @@ type CheckInRequest struct {
 	SeatPreference string `json:"seatPreference,omitempty"`
 }
 
-// ScheduleQuery — фильтры для GET расписания (OpenAPI).
 type ScheduleQuery struct {
 	From         *time.Time
 	To           *time.Time
@@ -91,13 +90,12 @@ type ScheduleQuery struct {
 	Offset       int
 }
 
-// RouteSearchParams — поиск маршрутов (OpenAPI).
 type RouteSearchParams struct {
-	DepartureDate    time.Time
-	BookingClass     string
-	MaxConnections   int // -1 = без ограничения
-	Timezone         string
-	Limit, Offset    int
+	DepartureDate  time.Time
+	BookingClass   string
+	MaxConnections int
+	Timezone       string
+	Limit, Offset  int
 }
 
 type BoardingPass struct {
@@ -111,11 +109,12 @@ type BoardingPass struct {
 }
 
 var (
-	ErrCityNotFound     = errors.New("city not found")
-	ErrAirportNotFound  = errors.New("airport not found")
-	ErrRouteNotFound    = errors.New("route not found")
-	ErrBookingNotFound  = errors.New("booking not found")
-	ErrNoSeatsAvailable = errors.New("no seats available")
+	ErrCityNotFound        = errors.New("city not found")
+	ErrAirportNotFound     = errors.New("airport not found")
+	ErrRouteNotFound       = errors.New("route not found")
+	ErrBookingNotFound     = errors.New("booking not found")
+	ErrNoSeatsAvailable    = errors.New("no seats available")
+	ErrPricingRuleNotFound = errors.New("pricing rule not found")
 	ErrCheckInNotAvailable = errors.New("check-in not available for this flight")
 )
 

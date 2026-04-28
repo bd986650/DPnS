@@ -18,7 +18,6 @@ func (r *Repository) airportExists(ctx context.Context, code string) (bool, erro
 	return ok, err
 }
 
-// GetInboundSchedule — расписание прилётов.
 func (r *Repository) GetInboundSchedule(ctx context.Context, airportCode string, q model.ScheduleQuery) ([]model.InboundScheduleEntry, error) {
 	ok, err := r.airportExists(ctx, airportCode)
 	if err != nil {
@@ -128,7 +127,6 @@ WHERE r.arrival_airport = $1`)
 	return out, nil
 }
 
-// GetOutboundSchedule — расписание вылетов.
 func (r *Repository) GetOutboundSchedule(ctx context.Context, airportCode string, q model.ScheduleQuery) ([]model.OutboundScheduleEntry, error) {
 	ok, err := r.airportExists(ctx, airportCode)
 	if err != nil {

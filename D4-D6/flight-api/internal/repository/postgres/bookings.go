@@ -88,14 +88,27 @@ WHERE f.flight_id = $1
 		}
 	}
 
-	for _, fr := range flights {
-		ok, err := r.hasFreeSeat(ctx, fr.ID, fr.Plane, req.BookingClass)
+	// Считаем цену для каждого сегмента один раз до транзакции.
+	segPrices := make([]float64, len(flights))
+	var total float64
+	for i, fr := range flights {
+		var price float64
+		err := r.pool.QueryRow(ctx, `
+SELECT pr.rule_price
+FROM bookings.pricing_rules pr
+WHERE pr.departure_airport = $1
+  AND pr.arrival_airport = $2
+  AND pr.fare_conditions = $3
+LIMIT 1
+`, fr.DepAP, fr.ArrAP, req.BookingClass).Scan(&price)
 		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return model.Booking{}, model.ErrPricingRuleNotFound
+			}
 			return model.Booking{}, err
 		}
-		if !ok {
-			return model.Booking{}, model.ErrNoSeatsAvailable
-		}
+		segPrices[i] = price
+		total += price
 	}
 
 	tx, err := r.pool.Begin(ctx)
@@ -104,6 +117,17 @@ WHERE f.flight_id = $1
 	}
 	defer tx.Rollback(ctx)
 
+	// Проверка наличия мест внутри транзакции, чтобы избежать гонки.
+	for _, fr := range flights {
+		ok, err := r.hasFreeSeats(ctx, tx, fr.ID, fr.Plane, req.BookingClass)
+		if err != nil {
+			return model.Booking{}, err
+		}
+		if !ok {
+			return model.Booking{}, model.ErrNoSeatsAvailable
+		}
+	}
+
 	var bookRef string
 	for attempt := 0; attempt < 8; attempt++ {
 		br, err := randomBookRef()
@@ -111,7 +135,9 @@ WHERE f.flight_id = $1
 			return model.Booking{}, err
 		}
 		var exists bool
-		_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM bookings.bookings WHERE book_ref = $1)`, br).Scan(&exists)
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM bookings.bookings WHERE book_ref = $1)`, br).Scan(&exists); err != nil {
+			return model.Booking{}, err
+		}
 		if !exists {
 			bookRef = br
 			break
@@ -119,26 +145,6 @@ WHERE f.flight_id = $1
 	}
 	if bookRef == "" {
 		return model.Booking{}, fmt.Errorf("could not allocate book_ref")
-	}
-
-	var total float64
-	for _, fr := range flights {
-		var segPrice float64
-		err := tx.QueryRow(ctx, `
-SELECT COALESCE(AVG(price), 0)
-FROM bookings.segments
-WHERE flight_id = $1 AND fare_conditions = $2
-`, fr.ID, req.BookingClass).Scan(&segPrice)
-		if err != nil {
-			return model.Booking{}, err
-		}
-		if segPrice < 1 {
-			segPrice = 500
-		}
-		total += segPrice
-	}
-	if total < 1 {
-		total = float64(len(flights)) * 500
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -150,7 +156,9 @@ VALUES ($1, now(), $2)
 	}
 
 	var maxTicket int64
-	_ = tx.QueryRow(ctx, `SELECT COALESCE(MAX(ticket_no::bigint), 0) FROM bookings.tickets`).Scan(&maxTicket)
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(ticket_no::bigint), 0) FROM bookings.tickets`).Scan(&maxTicket); err != nil {
+		return model.Booking{}, err
+	}
 	ticketNo := fmt.Sprintf("%013d", maxTicket+1)
 
 	passengerName := strings.TrimSpace(req.Passenger.FirstName + " " + req.Passenger.LastName)
@@ -162,20 +170,11 @@ VALUES ($1, $2, $3, $4, true)
 		return model.Booking{}, err
 	}
 
-	for _, fr := range flights {
-		var segPrice float64
-		err := tx.QueryRow(ctx, `
-SELECT COALESCE(AVG(price), 500)
-FROM bookings.segments
-WHERE flight_id = $1 AND fare_conditions = $2
-`, fr.ID, req.BookingClass).Scan(&segPrice)
-		if err != nil {
-			return model.Booking{}, err
-		}
+	for i, fr := range flights {
 		_, err = tx.Exec(ctx, `
 INSERT INTO bookings.segments (ticket_no, flight_id, fare_conditions, price)
 VALUES ($1, $2, $3, $4)
-`, ticketNo, fr.ID, req.BookingClass, segPrice)
+`, ticketNo, fr.ID, req.BookingClass, segPrices[i])
 		if err != nil {
 			return model.Booking{}, err
 		}
@@ -188,9 +187,13 @@ VALUES ($1, $2, $3, $4)
 	return r.GetBooking(ctx, bookRef)
 }
 
-func (r *Repository) hasFreeSeat(ctx context.Context, flightID int64, airplane, fare string) (bool, error) {
+type dbQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func (r *Repository) hasFreeSeats(ctx context.Context, q dbQuerier, flightID int64, airplane, fare string) (bool, error) {
 	var cap int
-	err := r.pool.QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 SELECT COUNT(*) FROM bookings.seats WHERE airplane_code = $1 AND fare_conditions = $2
 `, strings.TrimSpace(airplane), fare).Scan(&cap)
 	if err != nil {
@@ -200,13 +203,17 @@ SELECT COUNT(*) FROM bookings.seats WHERE airplane_code = $1 AND fare_conditions
 		return false, nil
 	}
 	var used int
-	err = r.pool.QueryRow(ctx, `
+	err = q.QueryRow(ctx, `
 SELECT COUNT(*) FROM bookings.segments WHERE flight_id = $1 AND fare_conditions = $2
 `, flightID, fare).Scan(&used)
 	if err != nil {
 		return false, err
 	}
 	return used < cap, nil
+}
+
+func (r *Repository) hasFreeSeat(ctx context.Context, flightID int64, airplane, fare string) (bool, error) {
+	return r.hasFreeSeats(ctx, r.pool, flightID, airplane, fare)
 }
 
 func (r *Repository) GetBooking(ctx context.Context, bookingID string) (model.Booking, error) {
@@ -295,8 +302,14 @@ func (r *Repository) CheckIn(ctx context.Context, bookingID string, req model.Ch
 		return model.BoardingPass{}, err
 	}
 
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return model.BoardingPass{}, err
+	}
+	defer tx.Rollback(ctx)
+
 	var ticketNo string
-	err = r.pool.QueryRow(ctx, `SELECT ticket_no FROM bookings.tickets WHERE book_ref = $1 LIMIT 1`, bookingID).Scan(&ticketNo)
+	err = tx.QueryRow(ctx, `SELECT ticket_no FROM bookings.tickets WHERE book_ref = $1 LIMIT 1`, strings.TrimSpace(bookingID)).Scan(&ticketNo)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.BoardingPass{}, model.ErrBookingNotFound
@@ -306,7 +319,7 @@ func (r *Repository) CheckIn(ctx context.Context, bookingID string, req model.Ch
 
 	var flightID int64
 	var routeNo string
-	err = r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 SELECT f.flight_id, trim(f.route_no)
 FROM bookings.segments s
 JOIN bookings.flights f ON f.flight_id = s.flight_id
@@ -321,7 +334,7 @@ LIMIT 1
 	}
 
 	var already bool
-	err = r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 SELECT EXISTS(SELECT 1 FROM bookings.boarding_passes WHERE ticket_no = $1 AND flight_id = $2)
 `, ticketNo, flightID).Scan(&already)
 	if err != nil {
@@ -332,7 +345,7 @@ SELECT EXISTS(SELECT 1 FROM bookings.boarding_passes WHERE ticket_no = $1 AND fl
 	}
 
 	var plane, fare string
-	err = r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 SELECT trim(r.airplane_code), trim(s.fare_conditions)
 FROM bookings.segments s
 JOIN bookings.flights f ON f.flight_id = s.flight_id
@@ -345,7 +358,7 @@ WHERE s.ticket_no = $1 AND f.flight_id = $2
 
 	seat := helper.PickSeat(req.SeatPreference)
 	var picked string
-	err = r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 SELECT s.seat_no FROM bookings.seats s
 WHERE s.airplane_code = $1 AND s.fare_conditions = $2
   AND s.seat_no NOT IN (SELECT bp.seat_no FROM bookings.boarding_passes bp WHERE bp.flight_id = $3)
@@ -362,15 +375,21 @@ ORDER BY s.seat_no LIMIT 1
 	}
 
 	var boardingNo int
-	_ = r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(boarding_no), 0) FROM bookings.boarding_passes WHERE flight_id = $1`, flightID).Scan(&boardingNo)
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(boarding_no), 0) FROM bookings.boarding_passes WHERE flight_id = $1`, flightID).Scan(&boardingNo); err != nil {
+		return model.BoardingPass{}, err
+	}
 	boardingNo++
 
 	bt := time.Now().UTC().Add(40 * time.Minute)
-	_, err = r.pool.Exec(ctx, `
-INSERT INTO boarding_passes (ticket_no, flight_id, seat_no, boarding_no, boarding_time)
+	_, err = tx.Exec(ctx, `
+INSERT INTO bookings.boarding_passes (ticket_no, flight_id, seat_no, boarding_no, boarding_time)
 VALUES ($1, $2, $3, $4, $5)
 `, ticketNo, flightID, seat, boardingNo, bt)
 	if err != nil {
+		return model.BoardingPass{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return model.BoardingPass{}, err
 	}
 
