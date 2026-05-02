@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,11 +77,19 @@ func (h *Handler) handleListRoutes(c *gin.Context) {
 	ctx := ctxlang.With(c.Request.Context(), ctxlang.ParseAcceptLanguage(c.GetHeader("Accept-Language")))
 	originAirports, err := h.resolvePointToAirports(ctx, originType, origin)
 	if err != nil {
+		if errors.Is(err, model.ErrCityNotFound) {
+			writeError(c, http.StatusBadRequest, "origin city not found")
+			return
+		}
 		writeError(c, http.StatusBadRequest, "invalid origin")
 		return
 	}
 	destAirports, err := h.resolvePointToAirports(ctx, destType, dest)
 	if err != nil {
+		if errors.Is(err, model.ErrCityNotFound) {
+			writeError(c, http.StatusBadRequest, "destination city not found")
+			return
+		}
 		writeError(c, http.StatusBadRequest, "invalid destination")
 		return
 	}

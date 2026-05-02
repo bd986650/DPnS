@@ -280,8 +280,9 @@ ORDER BY f.scheduled_departure
 
 	routeID := "F" + strings.Join(routeParts, "-")
 	fn, ln := parsePassengerName(passengerName)
+	bid := strings.TrimSpace(bookingID)
 	return model.Booking{
-		BookingID:    bookingID,
+		BookingID:    bid,
 		Status:       "confirmed",
 		RouteID:      routeID,
 		BookingClass: bookingClass,
